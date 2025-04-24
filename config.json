@@ -1,7 +1,7 @@
 {
     "ollama_base_url": "http://localhost:11434",
     "ollama_timeout": 60,
-    "bot_name": "TukTuk",
+    "bot_name": "Khargosh",
     "default_model": "llama3.2:latest",
     "source_urls": [],
     "theme_dark_mode": true,
