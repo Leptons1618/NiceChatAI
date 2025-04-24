@@ -163,6 +163,8 @@ def main():
     ui.run(
         title=cfg.get("bot_name", "NiceGUI Chat"),
         dark=True,  # Always use dark mode for Dracula theme
+        native=True,  # Use native mode for better performance
+        fullscreen=True,  # Fullscreen mode for immersive experience
         reload=False,  # Disable auto-reload for native mode
         show=True,
         favicon='https://raw.githubusercontent.com/zauberzeug/nicegui/main/nicegui/static/favicon.ico',
