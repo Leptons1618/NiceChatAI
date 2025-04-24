@@ -140,7 +140,7 @@ async def chat_page(client: Client):
         # set session title to this key
         session_titles[client_id] = title
         # display only the human title (strip timestamp, Title Case)
-        display_title = format_display_title(title)
+        display_title = format_display_title(title, max_len=70)  # Use longer title in header
         if title_label:
             title_label.set_text(display_title)
             title_label.update()
@@ -222,7 +222,7 @@ async def chat_page(client: Client):
         await save_current_conversation()
 
     # --- Navigation drawer with save/load conversations ---
-    left_drawer = ui.left_drawer(value=False).classes('bg-dark w-64')  # increase drawer width (64 = ~256px)
+    left_drawer = ui.left_drawer(value=False).props("width=350").classes('bg-dark')
     with left_drawer:
         ui.label(f'{cfg.get("bot_name", "ChatBot")}').classes('text-2xl font-bold text-center py-4')
         ui.separator().classes('mb-2')
@@ -232,9 +232,9 @@ async def chat_page(client: Client):
         def render_saved_list():
             ui.label('Saved Chats').classes('text-xs text-center opacity-50')
             # sort by timestamp prefix descending
-            for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=True):
-                display_title = format_display_title(key)
-                btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t))
+            for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=False):
+                display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
+                btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)).props('no-caps text-left align=left')
                 btn.props('flat')
                 btn.classes('w-full text-left text-sm text-gray-200 hover:text-accent py-1')
         # keep a reference to the refreshable function
@@ -256,10 +256,10 @@ async def chat_page(client: Client):
             with ui.row().classes('flex-1 justify-center'):
                 # initial header title
                 init_key = session_titles.get(client_id)
-                init_title = format_display_title(init_key) if init_key else 'New Conversation'
+                init_title = format_display_title(init_key, max_len=70) if init_key else 'New Conversation'  # Longer title for header
                 title_label = ui.label(init_title)
                 title_label.classes('text-base font-medium text-gray-300 truncate')
-                title_label.style('max-width:250px; white-space:nowrap; overflow:hidden;')
+                title_label.style('max-width:350px; white-space:nowrap; overflow:hidden;')  # Increased max width
             # right: model selector and actions
             with ui.row().classes('items-center'):
                 model_selector = ui.select(

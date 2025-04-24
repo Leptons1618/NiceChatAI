@@ -6,8 +6,9 @@
     "source_urls": [],
     "theme_dark_mode": true,
     "available_models_cache": [
-        "deepseek-r1:14b",
         "deepseek-r1:8b",
+        "gemma3:4b",
+        "llama2-uncensored:latest",
         "llama3.2:latest"
     ]
 }
