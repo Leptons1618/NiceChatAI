@@ -177,7 +177,8 @@ async def chat_page(client: Client):
         left_drawer.update()
         # update header title
         if title_label:
-            title_label.set_text(title)
+            display_title = format_display_title(title, max_len=100)  # Use longer title in header
+            title_label.set_text(display_title)
             title_label.update()
         # ui.notify(f"Saved '{title}'", timeout=2000, position='top')
 
@@ -232,7 +233,7 @@ async def chat_page(client: Client):
         def render_saved_list():
             ui.label('Saved Chats').classes('text-xs text-center opacity-50')
             # sort by timestamp prefix descending
-            for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=False):
+            for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=True):
                 display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
                 btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)).props('no-caps text-left align=left')
                 btn.props('flat')
@@ -256,10 +257,10 @@ async def chat_page(client: Client):
             with ui.row().classes('flex-1 justify-center'):
                 # initial header title
                 init_key = session_titles.get(client_id)
-                init_title = format_display_title(init_key, max_len=70) if init_key else 'New Conversation'  # Longer title for header
+                init_title = format_display_title(init_key, max_len=100) if init_key else 'New Conversation'  # Longer title for header
                 title_label = ui.label(init_title)
                 title_label.classes('text-base font-medium text-gray-300 truncate')
-                title_label.style('max-width:350px; white-space:nowrap; overflow:hidden;')  # Increased max width
+                title_label.style('max-width:450px; white-space:nowrap; overflow:hidden;')  # Increased max width
             # right: model selector and actions
             with ui.row().classes('items-center'):
                 model_selector = ui.select(
@@ -346,7 +347,9 @@ async def generate_conversation_title(messages: List[Tuple[str, str]]) -> str:
     # Take last up to 10 messages for context
     snippet = "\n".join(f"{name}: {msg}" for name, msg in messages[-10:])
     prompt = (
-        "Generate a concise title (under 8 words) for the following chat conversation:\n\n" + snippet
+    "Generate a concise, relevant title (under 8 words, title case, no markdown) "
+    "for the following conversation:\n\n"
+    f"{snippet}"
     )
     title = ""
     model_name = config.get_default_model() or ''
@@ -360,8 +363,10 @@ async def generate_conversation_title(messages: List[Tuple[str, str]]) -> str:
     title = title.strip().strip('"')
     # fallback to first user message if empty
     if not title:
-        first = next((m[1] for m in messages if m[0] == 'You'), '')
-        title = first.split('\n')[0][:30]
+        for name, msg in messages:
+            if name.lower() == 'you' and msg.strip():
+                title = msg.strip().split('.')[0][:50].strip()
+                break
     return title
 
 async def summarize_conversation(messages: List[Tuple[str, str]]) -> str:
