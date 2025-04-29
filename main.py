@@ -2,6 +2,7 @@
 import sys, asyncio
 from nicegui import ui, app
 import logging
+import platform  # Import platform to detect operating system
 
 # Import necessary modules from the app package
 from app import config
@@ -36,17 +37,18 @@ def main():
     cfg = config.load_config()
     logger.info("Application starting with loaded configuration.")
 
-    # Apply enhanced color theme
+    # Apply modern color theme with a professional palette
+    # Using the same color scheme as in config_page
     ui.colors(
-        primary='#bd93f9',    # Purple
-        secondary='#ff79c6',  # Pink
-        accent='#8be9fd',     # Cyan
-        positive='#50fa7b',   # Green
-        negative='#ff5555',   # Red
-        warning='#f1fa8c',    # Yellow
-        info='#6272a4',       # Comment Blue
-        dark='#282a36',       # Background
-        light='#f8f8f2'       # Foreground
+        primary='#6366f1',    # Indigo
+        secondary='#ec4899',  # Pink
+        accent='#06b6d4',     # Cyan
+        positive='#22c55e',   # Green
+        negative='#ef4444',   # Red
+        warning='#eab308',    # Yellow
+        info='#3b82f6',       # Blue
+        dark='#1e293b',       # Slate 800
+        light='#f8fafc'       # Slate 50
     )
     
     # Add global CSS for enhanced theme and better UX
@@ -55,16 +57,18 @@ def main():
         /* Base styling */
         body {
             font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
-            background-color: #1a1b26 !important;
-            color: #f8f8f2 !important;
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
             transition: background-color 0.3s, color 0.3s;
         }
         
         /* Card styling */
         .ni-card {
-            border-radius: 12px !important;
+            border-radius: 16px !important;
             overflow: hidden !important;
             transition: transform 0.2s, box-shadow 0.2s !important;
+            border: 1px solid rgba(148, 163, 184, 0.1) !important;
+            background-color: #1e293b !important;
         }
         .ni-card:hover {
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
@@ -72,38 +76,41 @@ def main():
         
         /* Input styling */
         .ni-input {
-            border-radius: 8px !important;
-            background-color: #383a59 !important;
-            color: #f8f8f2 !important;
+            border-radius: 12px !important;
+            background-color: #334155 !important;
+            color: #f8fafc !important;
             transition: all 0.2s !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
         }
         .ni-input:focus {
-            border-color: #bd93f9 !important;
-            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3) !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
         }
         
         /* Button styling */
         .ni-button {
-            border-radius: 8px !important;
+            border-radius: 12px !important;
             transition: all 0.2s !important;
+            font-weight: 500 !important;
         }
         .ni-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
         }
         
         /* Drawer styling */
         .ni-drawer {
-            background-color: #1e1f29 !important;
+            background-color: #1e293b !important;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.3) !important;
+            border-right: 1px solid rgba(148, 163, 184, 0.1) !important;
         }
         .ni-drawer-item {
-            border-radius: 8px !important;
-            margin: 4px 0 !important;
+            border-radius: 12px !important;
+            margin: 4px 8px !important;
             transition: all 0.2s !important;
         }
         .ni-drawer-item:hover {
-            background-color: rgba(189, 147, 249, 0.1) !important;
+            background-color: rgba(99, 102, 241, 0.1) !important;
             transform: translateX(3px);
         }
         
@@ -113,29 +120,29 @@ def main():
             height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(40, 42, 54, 0.2);
+            background: rgba(15, 23, 42, 0.2);
             border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb {
-            background-color: rgba(98, 114, 164, 0.5);
+            background-color: rgba(99, 102, 241, 0.5);
             border-radius: 3px;
             transition: background-color 0.3s;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(98, 114, 164, 0.8);
+            background-color: rgba(99, 102, 241, 0.8);
         }
         
         /* Tooltip styling */
         .ni-tooltip {
-            background-color: #44475a !important;
-            color: #f8f8f2 !important;
-            border-radius: 6px !important;
+            background-color: #334155 !important;
+            color: #f8fafc !important;
+            border-radius: 8px !important;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2) !important;
         }
         
         /* Notification styling */
         .ni-notification {
-            border-radius: 8px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
         }
         
@@ -146,6 +153,35 @@ def main():
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Header styling */
+        .ni-header {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1) !important;
+        }
+        
+        /* Footer styling */
+        .ni-footer {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
+            border-top: 1px solid rgba(148, 163, 184, 0.1) !important;
+        }
+        
+        /* Tab styling */
+        .ni-tab {
+            border-radius: 12px 12px 0 0 !important;
+            transition: all 0.2s !important;
+        }
+        .ni-tab--selected {
+            background-color: rgba(99, 102, 241, 0.1) !important;
+            border-bottom: 2px solid #6366f1 !important;
+        }
+        
+        /* Switch styling */
+        .ni-switch {
+            transition: all 0.2s !important;
         }
         
         /* Add Font Awesome for better icons */
@@ -159,11 +195,14 @@ def main():
     </style>
     ''')
 
+    # Determine if we should use native mode based on the OS
+    is_windows = platform.system() == 'Windows'
+    
     # Run the NiceGUI app with enhanced settings
     ui.run(
         title=cfg.get("bot_name", "NiceGUI Chat"),
-        dark=True,  # Always use dark mode for Dracula theme
-        native=True,  # Use native mode for better performance
+        dark=True,  # Always use dark mode for modern theme
+        native=is_windows,  # Use native mode only on Windows
         fullscreen=True,  # Fullscreen mode for immersive experience
         reload=False,  # Disable auto-reload for native mode
         show=True,

@@ -1,4 +1,4 @@
-from nicegui import Client, ui, app
+from nicegui import ui, app, Client
 
 from typing import List, Dict, Tuple
 import logging
@@ -23,13 +23,35 @@ async def chat_page(client: Client):
     client_id = client.id
     cfg = config.get_config()
 
-    # Restore CSS styling and JS scripts for scrollbars, chat bubbles, and copy/exit behavior
+    # Add consistent styling with config_page
     ui.add_head_html("""<style>
-        /* Chat scroll area styling */
-        #chat-scroll { height: calc(100vh - 190px) !important; overflow-y: auto !important; scrollbar-width: none; }
-        #chat-scroll::-webkit-scrollbar { width: 0; }
-        #chat-scroll:hover { scrollbar-width: thin; }
+        /* Prevent body scrolling */
+        body {
+            overflow: hidden !important; 
+        }
+
+        /* Chat scroll area styling - Adjust height calculation */
+        #chat-scroll { 
+            /* Estimate header (~60px) + footer (~70px) + padding/margins (~10px) = ~140px */
+            height: calc(100vh - 140px) !important; 
+            overflow-y: auto !important; 
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+            border-radius: 16px !important;
+            border: 1px solid rgba(148, 163, 184, 0.1) !important;
+            background-color: #1e293b !important;
+        }
+        #chat-scroll::-webkit-scrollbar { 
+            width: 0; /* Webkit browsers - Hide default */
+            height: 0;
+        }
+        /* Optional: Show custom scrollbar on hover if desired */
+        /*
         #chat-scroll:hover::-webkit-scrollbar { width: 6px; }
+        #chat-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(98, 114, 164, 0.5); border-radius: 3px; }
+        #chat-scroll:hover { scrollbar-width: thin; scrollbar-color: rgba(98, 114, 164, 0.5) transparent; } 
+        */
+
         /* Chat bubble markdown styling */
         .chat-bubble h1 { font-size:1em; margin:0.4em 0; }
         .chat-bubble h2 { font-size:0.95em; margin:0.35em 0; }
@@ -37,82 +59,162 @@ async def chat_page(client: Client):
         .chat-bubble p, .chat-bubble li { font-size:0.9em; line-height:1.4; }
         .chat-bubble p { margin:0.2em 0 !important; }
         .chat-bubble ul, .chat-bubble ol { margin-left:1em; margin-bottom:0.5em; }
-        .chat-bubble code { background:#2e2e2e; color:#f8f8f2; padding:2px 4px; border-radius:4px; font-family:monospace; font-size:0.85em; user-select:text; }
-        .chat-bubble pre { background:#2e2e2e; padding:12px; padding-top:30px; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85em; margin:0.5em 0; position:relative; user-select:text; }
+        .chat-bubble code { background:#334155; color:#f8fafc; padding:2px 4px; border-radius:4px; font-family:'Fira Code', monospace; font-size:0.85em; user-select:text; }
+        .chat-bubble pre { background:#334155; padding:12px; padding-top:30px; border-radius:12px; overflow-x:auto; font-family:'Fira Code', monospace; font-size:0.85em; margin:0.5em 0; position:relative; user-select:text; }
         .chat-bubble pre code { background:none; }
-        /* Copy button styling */
-        .copy-button { position:absolute; top:5px; right:5px; background:#44475a; color:#f8f8f2; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:0.75em; opacity:0.7; transition:opacity 0.2s; }
-        .copy-button:hover { opacity:1; }
-        .copy-button:active { background:#6272a4; }
-    </style>""")
-    ui.add_head_html("""<style>
-    /* Modern form styling from config_page */
-    .config-card {
-        border-radius: 12px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
-        transition: transform 0.2s, box-shadow 0.2s !important;
-        overflow: hidden !important;
-        border: none !important;
-    }
-    .config-card:hover {
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
-    }
-    .config-input {
-        border-radius: 8px !important;
-        transition: all 0.2s !important;
-        border: 1px solid #44475a !important;
-    }
-    .config-input:focus {
-        border-color: #bd93f9 !important;
-        box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3) !important;
-    }
-    .config-button {
-        transition: all 0.2s !important;
-        border-radius: 8px !important;
-    }
-    .config-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
-    }
-    .config-section {
-        border-left: 3px solid #bd93f9 !important;
-        padding-left: 16px !important;
-        margin-bottom: 24px !important;
-    }
-    .config-label {
-        font-weight: 500 !important;
-        margin-bottom: 4px !important;
-        color: #f8f8f2 !important;
-    }
-    .help-text {
-        font-size: 0.8rem !important;
-        opacity: 0.7 !important;
-        margin-top: 4px !important;
-    }
-</style>""")
-    ui.add_head_html("""
-<script>
-    function copyCode(button) {
-        const pre = button.parentElement;
-        const code = pre.querySelector('code');
-        if (navigator.clipboard && code) {
-            navigator.clipboard.writeText(code.innerText).then(() => { button.textContent='Copied!'; setTimeout(()=>button.textContent='Copy',2000); });
+        
+        /* User message styling */
+        .user-message {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+            color: white !important;
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2) !important;
         }
-    }
-    function addCopyButtons() {
-        document.querySelectorAll('.chat-bubble pre').forEach(pre => {
-            if (pre.querySelector('.copy-button')) return;
-            const btn = document.createElement('button'); btn.className='copy-button'; btn.textContent='Copy'; btn.onclick=function(){copyCode(this);}; pre.appendChild(btn);
+        
+        /* Bot message styling */
+        .bot-message {
+            background-color: #1e293b !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        /* Copy button styling */
+        .copy-button { 
+            position:absolute; 
+            top:5px; 
+            right:5px; 
+            background:#475569; 
+            color:#f8fafc; 
+            border:none; 
+            padding:3px 8px; 
+            border-radius:6px; 
+            cursor:pointer; 
+            font-size:0.75em; 
+            opacity:0.7; 
+            transition:opacity 0.2s; 
+        }
+        .copy-button:hover { opacity:1; background:#6366f1; }
+        .copy-button:active { background:#4f46e5; }
+        
+        /* Avatar styling */
+        .avatar-img {
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            transition: all 0.2s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .user-avatar {
+            border-color: rgba(99, 102, 241, 0.5) !important;
+        }
+        .bot-avatar {
+            border-color: rgba(6, 182, 212, 0.5) !important;
+        }
+        
+        /* Input styling - matching config_page */
+        .chat-input {
+            border-radius: 12px !important;
+            transition: all 0.2s !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            background-color: #334155 !important;
+        }
+        .chat-input:focus {
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
+        }
+        
+        /* Button styling - matching config_page */
+        .chat-button {
+            transition: all 0.2s !important;
+            border-radius: 12px !important;
+            font-weight: 500 !important;
+        }
+        .chat-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+        }
+        
+        /* Drawer styling - Allow vertical scroll ONLY if needed, hide default bar */
+        .chat-drawer {
+            background-color: #1e293b !important;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3) !important;
+            border-right: 1px solid rgba(148, 163, 184, 0.1) !important;
+            overflow-y: auto; /* Allow scroll if content overflows */
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+        .chat-drawer::-webkit-scrollbar {
+             width: 0; /* Webkit browsers - Hide default */
+             height: 0;
+        }
+        /* Ensure card inside drawer doesn't cause unexpected overflow */
+        .chat-drawer > .ni-card {
+             overflow: visible !important; /* Let drawer handle scroll */
+             box-shadow: none !important;
+        }
+        
+        /* Saved chat item styling */
+        .saved-chat-item {
+            border-radius: 12px !important;
+            transition: all 0.2s !important;
+            overflow: hidden !important;
+        }
+        .saved-chat-item:hover {
+            background-color: rgba(99, 102, 241, 0.1) !important;
+            transform: translateX(3px);
+        }
+        
+        /* Header and footer styling */
+        .chat-header, .chat-footer {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1) !important;
+        }
+        .chat-footer {
+            border-top: 1px solid rgba(148, 163, 184, 0.1) !important;
+            border-bottom: none !important;
+        }
+        
+        /* Model selector styling */
+        .model-selector {
+            border-radius: 12px !important;
+            background-color: #334155 !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        }
+    </style>""")
+    
+    ui.add_head_html("""<script>
+        function copyCode(button) {
+            const pre = button.parentElement;
+            const code = pre.querySelector('code');
+            if (navigator.clipboard && code) {
+                navigator.clipboard.writeText(code.innerText).then(() => { button.textContent='Copied!'; setTimeout(()=>button.textContent='Copy',2000); });
+            }
+        }
+        function addCopyButtons() {
+            document.querySelectorAll('.chat-bubble pre').forEach(pre => {
+                if (pre.querySelector('.copy-button')) return;
+                const btn = document.createElement('button'); btn.className='copy-button'; btn.textContent='Copy'; btn.onclick=function(){copyCode(this);}; pre.appendChild(btn);
+            });
+        }
+        // Wait for the DOM to be fully loaded before running scripts that access it
+        document.addEventListener('DOMContentLoaded', () => {
+            addCopyButtons(); // Initial call
+            // Initialize the observer *after* the DOM is ready
+            new MutationObserver((mutations) => { 
+                mutations.forEach(m => m.addedNodes.forEach(node => { 
+                    // Check if the added node is an element and contains or is a 'pre' tag
+                    if (node.nodeType === 1 && (node.matches('pre') || node.querySelector('pre'))) {
+                        addCopyButtons(); 
+                    }
+                })); 
+            }).observe(document.body, { childList: true, subtree: true });
         });
-    }
-    document.addEventListener('DOMContentLoaded', addCopyButtons);
-    new MutationObserver((mutations) => { mutations.forEach(m=>m.addedNodes.forEach(node=>{ if(node.nodeType===1&&(node.matches('pre')||node.querySelector('pre'))) addCopyButtons(); })); }).observe(document.body,{childList:true,subtree:true});
-</script>
-<script>
-  document.addEventListener('keydown', function(event) {
-      if (event.ctrlKey && (event.key==='c' || event.key==='C')) { event.preventDefault(); window.close(); }
-  });
-</script>""")
+    </script>
+    <script>
+      document.addEventListener('keydown', function(event) {
+          if (event.ctrlKey && (event.key==='c' || event.key==='C')) { event.preventDefault(); window.close(); }
+      });
+    </script>""")
 
     # Initialize client state
     chats[client_id] = []
@@ -144,7 +246,6 @@ async def chat_page(client: Client):
         if title_label:
             title_label.set_text(display_title)
             title_label.update()
-        # ui.notify(f"Loaded '{display_title}'", timeout=2000, position='top')
 
     # initialize per-session title (empty until first save)
     session_titles[client_id] = ''
@@ -180,7 +281,6 @@ async def chat_page(client: Client):
             display_title = format_display_title(title, max_len=100)  # Use longer title in header
             title_label.set_text(display_title)
             title_label.update()
-        # ui.notify(f"Saved '{title}'", timeout=2000, position='top')
 
     # Placeholder for dropdown to be referenced by fetch helper
     model_selector = None
@@ -223,59 +323,88 @@ async def chat_page(client: Client):
         await save_current_conversation()
 
     # --- Navigation drawer with save/load conversations ---
-    left_drawer = ui.left_drawer(value=False).props("width=350").classes('bg-dark')
+    # Ensure the drawer itself handles scrolling, not necessarily the card inside
+    left_drawer = ui.left_drawer(value=False).props("width=450").classes('chat-drawer')
     with left_drawer:
-        ui.label(f'{cfg.get("bot_name", "ChatBot")}').classes('text-2xl font-bold text-center py-4')
-        ui.separator().classes('mb-2')
-        # new chat action
-        ui.button('New Chat', icon='add', on_click=new_chat).props('flat dense').classes('w-full text-left text-sm text-white hover:text-accent py-1 mb-2 config-button')
+        # Removed the wrapping ui.card here, apply styles directly or to drawer items
+        ui.label(f'{cfg.get("bot_name", "ChatBot")}').classes('text-2xl font-bold text-center py-4 px-4')
+        ui.separator().classes('mb-4 opacity-20 mx-4')
+            
+        # new chat action with improved styling (apply padding/margin here)
+        ui.button('New Chat', icon='add', on_click=new_chat) \
+            .props('flat') \
+            .classes('w-full text-left text-sm text-white hover:text-primary py-3 mb-3 chat-button mx-4')
+            
         @ui.refreshable
         def render_saved_list():
-            ui.label('Saved Chats').classes('text-xs text-center opacity-50')
+            ui.label('Saved Chats').classes('text-xs text-center opacity-70 my-3 px-4')
             # sort by timestamp prefix descending
-            for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=True):
-                display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
-                btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)).props('no-caps text-left align=left')
-                btn.props('flat')
-                btn.classes('w-full text-left text-sm text-gray-200 hover:text-accent py-1')
+            # Apply margin/padding to the container or items directly
+            with ui.column().classes('w-full px-4'): # Add padding to the column
+                for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=True):
+                    display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
+                    # Card for item styling, ensure it doesn't cause overflow itself
+                    with ui.card().classes('w-full mb-2 p-0 saved-chat-item bg-transparent border-0 shadow-none'):
+                        btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)) \
+                            .props('no-caps text-left align=left flat') \
+                            .classes('w-full text-left text-sm text-gray-200 hover:text-primary py-2')
+            
         # keep a reference to the refreshable function
         saved_list = render_saved_list
         # initial render
         saved_list()
 
         ui.space()
-        ui.label('Powered by NiceGUI & Ollama').classes('text-xs text-center opacity-50')
+        with ui.row().classes('w-full justify-center items-center py-4'):
+            ui.label('Powered by').classes('text-xs opacity-70')
+            ui.image('https://nicegui.io/logo_square.png').classes('w-5 h-5 mx-1')
+            ui.label('&').classes('text-xs opacity-70 mx-1')
+            ui.image('https://ollama.com/public/ollama.png').classes('w-5 h-5 mx-1')
 
     # --- Header ---
-    with ui.header(elevated=True).classes('bg-dark px-4'):
+    # Note: The actual rendered height of header/footer might vary. 
+    # Inspect element in browser dev tools to get precise heights if needed.
+    with ui.header(elevated=True).classes('px-4 py-3 chat-header'): # Approx 50-60px height
         with ui.row().classes('w-full items-center justify-between'):
             # left: menu and app name
             with ui.row().classes('items-center'):
-                ui.button(icon='menu', on_click=lambda: left_drawer.toggle()).props('flat round').classes('mr-2')
-                ui.label(f'{cfg.get("bot_name", "ChatBot")}').classes('text-lg font-semibold text-white')
+                ui.button(icon='menu', on_click=lambda: left_drawer.toggle()) \
+                    .props('flat round') \
+                    .classes('mr-2 text-light chat-button')
+                ui.label(f'{cfg.get("bot_name", "ChatBot")}') \
+                    .classes('text-lg font-semibold text-white')
+            
             # center: session title
             with ui.row().classes('flex-1 justify-center'):
                 # initial header title
                 init_key = session_titles.get(client_id)
                 init_title = format_display_title(init_key, max_len=100) if init_key else 'New Conversation'  # Longer title for header
-                title_label = ui.label(init_title)
-                title_label.classes('text-base font-medium text-gray-300 truncate')
-                title_label.style('max-width:450px; white-space:nowrap; overflow:hidden;')  # Increased max width
+                title_label = ui.label(init_title) \
+                    .classes('text-base font-medium text-gray-300 truncate') \
+                    .style('max-width:450px; white-space:nowrap; overflow:hidden;')  # Increased max width
+            
             # right: model selector and actions
             with ui.row().classes('items-center'):
                 model_selector = ui.select(
                     options=config.get_available_models_cache(),
                     value=selected_models.get(client_id),
                     on_change=lambda e: selected_models.update({client_id: e.value})
-                ).props('outlined dense').classes('text-xs mr-2')
-                ui.button(icon='refresh', on_click=fetch_models_and_update_ui).props('flat round').classes('text-light ml-2')
-                ui.button(icon='settings', on_click=lambda: ui.navigate.to('/config')).props('flat round').classes('text-light ml-2')
-                ui.button(icon='exit_to_app', on_click=lambda: app.shutdown()).props('flat round').classes('text-light ml-2')
+                ).props('outlined dense').classes('text-xs mr-2 model-selector')
+                
+                ui.button(icon='refresh', on_click=fetch_models_and_update_ui) \
+                    .props('flat round') \
+                    .classes('text-light ml-2 chat-button')
+                ui.button(icon='settings', on_click=lambda: ui.navigate.to('/config')) \
+                    .props('flat round') \
+                    .classes('text-light ml-2 chat-button')
+                ui.button(icon='exit_to_app', on_click=lambda: app.shutdown()) \
+                    .props('flat round') \
+                    .classes('text-light ml-2 chat-button')
 
     # Main chat container - Full size (not including the footer)
-    with ui.column().classes('w-full px-2 py-2'):
-        # Scroll area now uses CSS height
-        scroll_container = ui.scroll_area().props('id=chat-scroll').classes('w-full bg-gray-900 shadow-lg')
+    with ui.column().classes('w-full px-4 py-3'): # This padding adds to the total height calculation
+        # Scroll area with improved styling
+        scroll_container = ui.scroll_area().props('id=chat-scroll').classes('w-full shadow-lg')
         # Use the scroll_container
         with scroll_container:
              @ui.refreshable
@@ -293,13 +422,13 @@ async def chat_page(client: Client):
                          with ui.row().classes(f"w-full {'justify-end' if is_user else 'justify-start'} items-start"):
                              # Bot avatar on left
                              if not is_user:
-                                 ui.image(avatar_url).classes('w-9 h-9 rounded-full mr-2') # Larger avatar
+                                 ui.image(avatar_url).classes('w-10 h-10 rounded-full mr-3 avatar-img bot-avatar') # Larger avatar
                              # Message bubble
-                             with ui.card().classes('chat-bubble p-2 mb-2 shadow-md config-card'):
+                             with ui.card().classes(f'chat-bubble p-3 mb-2 shadow-md {"user-message" if is_user else "bot-message"} rounded-2xl max-w-[80%]'):
                                  ui.markdown(message)
                              # User avatar on right
                              if is_user:
-                                 ui.image(avatar_url).classes('w-9 h-9 rounded-full ml-2') # Larger avatar
+                                 ui.image(avatar_url).classes('w-10 h-10 rounded-full ml-3 avatar-img user-avatar') # Larger avatar
                  # Auto-scroll to bottom of scroll area after UI update
                  ui.timer(0.1, lambda: scroll_container.scroll_to(percent=1.0), once=True)
                  ui.run_javascript("addCopyButtons()")
@@ -307,12 +436,18 @@ async def chat_page(client: Client):
              chat_messages()
              ui.run_javascript("addCopyButtons()")
 
-    # Input area - Footer as top-level element (moved outside the column)
-    with ui.footer().classes('bg-dark px-4 py-3 shadow-lg'):
+    # Input area - Footer as top-level element with improved styling
+    with ui.footer().classes('px-4 py-4 chat-footer'): # Approx 60-70px height
         with ui.row().classes('w-full items-center max-w-6xl mx-auto'):
-            with ui.input(placeholder='Type your message...').classes('flex-grow rounded-full config-input').props('outlined dense').on('keydown.enter', send) as text:
+            with ui.input(placeholder='Type your message...') \
+                    .classes('flex-grow rounded-full chat-input') \
+                    .props('outlined dense') \
+                    .on('keydown.enter', send) as text:
                 pass
-            ui.button('', icon='send', on_click=send).props('flat dense color=accent').classes('ml-2 text-xl config-button')  # Icon-only send button
+            
+            ui.button('', icon='send', on_click=send) \
+                .props('flat dense color=primary') \
+                .classes('ml-3 text-xl rounded-full h-12 w-12 flex items-center justify-center chat-button')
 
     # --- Initial Setup ---
     await client.connected()
@@ -408,4 +543,3 @@ def format_display_title(key: str, max_len: int = 30) -> str:
     raw = re.sub(r'^[^A-Za-z0-9]+', '', raw)
     # truncate longer titles with ellipsis
     return raw if len(raw) <= max_len else raw[:max_len-3] + '...'
-

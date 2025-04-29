@@ -15,11 +15,12 @@ async def config_page():
     ui.add_head_html("""<style>
         /* Modern form styling */
         .config-card {
-            border-radius: 12px !important;
+            border-radius: 16px !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
             transition: transform 0.2s, box-shadow 0.2s !important;
             overflow: hidden !important;
-            border: none !important;
+            border: 1px solid rgba(148, 163, 184, 0.1) !important;
+            background-color: #1e293b !important;
         }
         .config-card:hover {
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
@@ -27,19 +28,21 @@ async def config_page():
         
         /* Input styling */
         .config-input {
-            border-radius: 8px !important;
+            border-radius: 12px !important;
             transition: all 0.2s !important;
-            border: 1px solid #44475a !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            background-color: #334155 !important;
         }
         .config-input:focus {
-            border-color: #bd93f9 !important;
-            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3) !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
         }
         
         /* Button styling */
         .config-button {
             transition: all 0.2s !important;
-            border-radius: 8px !important;
+            border-radius: 12px !important;
+            font-weight: 500 !important;
         }
         .config-button:hover {
             transform: translateY(-2px);
@@ -48,7 +51,7 @@ async def config_page():
         
         /* Section styling */
         .config-section {
-            border-left: 3px solid #bd93f9 !important;
+            border-left: 3px solid #6366f1 !important;
             padding-left: 16px !important;
             margin-bottom: 24px !important;
         }
@@ -57,7 +60,7 @@ async def config_page():
         .config-label {
             font-weight: 500 !important;
             margin-bottom: 4px !important;
-            color: #f8f8f2 !important;
+            color: #f8fafc !important;
         }
         
         /* Help text styling */
@@ -66,14 +69,25 @@ async def config_page():
             opacity: 0.7 !important;
             margin-top: 4px !important;
         }
+        
+        /* Tab styling */
+        .ni-tab {
+            border-radius: 12px 12px 0 0 !important;
+            transition: all 0.2s !important;
+        }
+        .ni-tab--selected {
+            background-color: rgba(99, 102, 241, 0.1) !important;
+            border-bottom: 2px solid #6366f1 !important;
+        }
+        
+        /* Switch styling */
+        .ni-switch {
+            transition: all 0.2s !important;
+        }
     </style>""")
 
     # --- Helper Functions ---
     async def refresh_models_list():
-        # Show loading notification
-        # ui.notify("Refreshing models list...", timeout=2000, position='top-right', 
-        #           color='info', icon='fa-solid fa-spinner fa-spin', close_button='X')
-        
         models = await llm.get_available_models() # Fetch and update cache via llm module
         if models:
             model_select.options = models
@@ -84,25 +98,19 @@ async def config_page():
                  config.set_default_model(new_default) # Update config directly
                  model_select.value = new_default # Update UI
                  ui.notify(f"Default model reset to {new_default}", color='warning', position='top-right', 
-                           timeout=3000, icon='fa-solid fa-triangle-exclamation', close_button='X')
+                           timeout=3000, icon='info', close_button='X')
             else:
                  model_select.value = current_default # Ensure UI reflects config
             model_select.update()
-            # ui.notify("Models list refreshed successfully", color='positive', position='top-right', 
-            #           timeout=2000, icon='fa-solid fa-check', close_button='X')
         else:
             ui.notify("Failed to refresh models from Ollama", color='negative', position='top-right', 
-                      timeout=3000, icon='fa-solid fa-circle-exclamation', close_button='X')
+                      timeout=3000, icon='error', close_button='X')
             # Keep existing options in selector if refresh fails
             model_select.options = config.get_available_models_cache()
             model_select.value = config.get_default_model()
             model_select.update()
 
     def save_and_notify():
-        # Show saving notification
-        # ui.notify("Saving configuration...", timeout=2000, position='top-right', 
-        #           color='info', icon='fa-solid fa-spinner fa-spin', close_button='X')
-        
         # Update config dictionary from UI elements before saving
         config.update_config_value("bot_name", bot_name_input.value)
         config.update_config_value("default_model", model_select.value)
@@ -115,23 +123,19 @@ async def config_page():
 
         if config.save_config():
             ui.notify("Configuration saved successfully!", color='positive', position='top-right', 
-                      timeout=3000, icon='fa-solid fa-check', close_button='X')
+                      timeout=3000, icon='check_circle', close_button='X')
             # Apply theme change immediately
             if dark_mode_switch.value:
                 ui.dark_mode().enable()
             else:
                 ui.dark_mode().disable()
-            
-            # Notify user to restart the app if they changed settings that require restart
-            # ui.notify("Some settings will take effect after restarting the app", color='info', 
-            #           timeout=5000, position='top-right', icon='fa-solid fa-info-circle', close_button='X')
         else:
             ui.notify("Failed to save configuration", color='negative', position='top-right', 
-                      timeout=3000, icon='fa-solid fa-circle-exclamation', close_button='X')
+                      timeout=3000, icon='error', close_button='X')
 
     # --- Enhanced UI Layout ---
     # Header with visible back button and title
-    with ui.header(elevated=True).classes('bg-dark flex items-center px-4 py-2 shadow-lg'):
+    with ui.header(elevated=True).classes('flex items-center px-4 py-2 shadow-lg ni-header'):
         with ui.row().classes('items-center'):
             ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/'))\
                 .props('flat round')\
@@ -149,7 +153,7 @@ async def config_page():
         with ui.tab_panels(tabs, value=general_tab).classes('w-full max-w-3xl mx-auto'):
             # General Settings Tab
             with ui.tab_panel(general_tab):
-                with ui.card().classes('w-full bg-gray-900 text-light shadow-xl rounded-lg config-card'):
+                with ui.card().classes('w-full text-light shadow-xl config-card'):
                     with ui.column().classes('w-full p-6 space-y-6'):
                         # Bot Settings Section with enhanced styling
                         with ui.column().classes('config-section'):
@@ -161,7 +165,7 @@ async def config_page():
 
             # Model Settings Tab
             with ui.tab_panel(model_tab):
-                with ui.card().classes('w-full bg-gray-900 text-light shadow-xl rounded-lg config-card'):
+                with ui.card().classes('w-full text-light shadow-xl config-card'):
                     with ui.column().classes('w-full p-6 space-y-6'):
                         # Ollama Settings Section with enhanced styling
                         with ui.column().classes('config-section'):
@@ -191,7 +195,7 @@ async def config_page():
 
             # Appearance Tab
             with ui.tab_panel(appearance_tab):
-                with ui.card().classes('w-full bg-gray-900 text-light shadow-xl rounded-lg config-card'):
+                with ui.card().classes('w-full text-light shadow-xl config-card'):
                     with ui.column().classes('w-full p-6 space-y-6'):
                         # Theme Settings Section with enhanced styling
                         with ui.column().classes('config-section'):
@@ -205,7 +209,7 @@ async def config_page():
 
             # Advanced Tab
             with ui.tab_panel(advanced_tab):
-                with ui.card().classes('w-full bg-gray-900 text-light shadow-xl rounded-lg config-card'):
+                with ui.card().classes('w-full text-light shadow-xl config-card'):
                     with ui.column().classes('w-full p-6 space-y-6'):
                         # Source URLs Section with enhanced styling
                         with ui.column().classes('config-section'):
@@ -217,7 +221,7 @@ async def config_page():
 
         # Save Button at bottom
         with ui.row().classes('w-full max-w-3xl mx-auto justify-end mt-6'):
-            ui.button('Save Configuration', icon='save', on_click=save_and_notify).props('color=primary').classes('config-button')
+            ui.button('Save Configuration', icon='save', on_click=save_and_notify).props('color=primary').classes('config-button px-6 py-2')
 
     # Initial model list load (non-blocking) 
     await refresh_models_list()
