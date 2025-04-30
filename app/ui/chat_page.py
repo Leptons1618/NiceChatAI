@@ -287,14 +287,18 @@ async def chat_page(client: Client):
 
     # Handler: fetch models and update the dropdown
     async def fetch_models_and_update_ui():
-        models = await llm.get_available_models()
-        config.set_available_models_cache(models)
-        if model_selector:
-            model_selector.options = models
-            if models and selected_models.get(client_id) not in models:
-                selected_models[client_id] = models[0]
-                model_selector.value = models[0]
-            model_selector.update()
+        try:
+            models = await llm.get_available_models()
+            config.set_available_models_cache(models)
+            if model_selector:
+                model_selector.options = models
+                if models and selected_models.get(client_id) not in models:
+                    selected_models[client_id] = models[0]
+                    model_selector.value = models[0]
+                model_selector.update()
+        except Exception as e:
+            logger.error(f"Failed to fetch models from Ollama: {e}")
+            ui.notify("Could not connect to Ollama service. Please ensure it's running.", color='negative', position='top')
 
     # Handler: send user message and stream assistant response
     async def send(e=None):
@@ -308,19 +312,28 @@ async def chat_page(client: Client):
         last_title = list(saved_conversations.keys())[-1] if saved_conversations else None
         summary = saved_conversations.get(last_title, {}).get('summary', '') if last_title else ''
         system_prompt = summary + '\n\n' if summary else None
-        chats[client_id].append((cfg.get('bot_name', 'Bot'), ''))
+        
+        bot_name = cfg.get('bot_name', 'Bot')
+        chats[client_id].append((bot_name, ''))
         chat_messages.refresh()
-        async for chunk in llm.generate_ollama_response(
-            client_id,
-            user_text,
-            selected_models.get(client_id) or '',
-            system_prompt,
-        ):
-            name, prev = chats[client_id][-1]
-            chats[client_id][-1] = (name, prev + chunk)
+        
+        try:
+            async for chunk in llm.generate_ollama_response(
+                client_id,
+                user_text,
+                selected_models.get(client_id) or '',
+                system_prompt,
+            ):
+                name, prev = chats[client_id][-1]
+                chats[client_id][-1] = (name, prev + chunk)
+                chat_messages.refresh()
+            # auto-save conversation after assistant response
+            await save_current_conversation()
+        except Exception as e:
+            logger.error(f"Error generating response from Ollama: {e}")
+            chats[client_id][-1] = (bot_name, "Error: Could not connect to Ollama service. Please ensure it's running.")
             chat_messages.refresh()
-        # auto-save conversation after assistant response
-        await save_current_conversation()
+            ui.notify("Failed to get response from Ollama service.", color='negative', position='top')
 
     # --- Navigation drawer with save/load conversations ---
     # Ensure the drawer itself handles scrolling, not necessarily the card inside
@@ -488,13 +501,19 @@ async def generate_conversation_title(messages: List[Tuple[str, str]]) -> str:
     )
     title = ""
     model_name = config.get_default_model() or ''
-    async for chunk in llm.generate_ollama_response(
-        client_id="system",
-        user_input=prompt,
-        model_name=model_name,
-        system_prompt=None
-    ):
-        title += chunk
+    
+    try:
+        async for chunk in llm.generate_ollama_response(
+            client_id="system",
+            user_input=prompt,
+            model_name=model_name,
+            system_prompt=None
+        ):
+            title += chunk
+    except Exception as e:
+        logger.error(f"Failed to generate title via Ollama: {e}")
+        return "Chat" # Default title on error
+        
     title = title.strip().strip('"')
     # fallback to first user message if empty
     if not title:
@@ -514,10 +533,16 @@ async def summarize_conversation(messages: List[Tuple[str, str]]) -> str:
     summary = ""
     # stream the summary
     model_name = config.get_default_model() or ''
-    async for chunk in llm.generate_ollama_response(
-        client_id="system", user_input=prompt, model_name=model_name, system_prompt=None
-    ):
-        summary += chunk
+    
+    try:
+        async for chunk in llm.generate_ollama_response(
+            client_id="system", user_input=prompt, model_name=model_name, system_prompt=None
+        ):
+            summary += chunk
+    except Exception as e:
+        logger.error(f"Failed to generate summary via Ollama: {e}")
+        return "" # Return empty summary on error
+        
     return summary.strip()
 
 async def should_generate_title(new_message: str, messages: List[Tuple[str, str]]) -> bool:
@@ -530,10 +555,16 @@ async def should_generate_title(new_message: str, messages: List[Tuple[str, str]
     )
     response = ""
     model_name = config.get_default_model() or ''
-    async for chunk in llm.generate_ollama_response(
-        client_id="system", user_input=prompt, model_name=model_name, system_prompt=None
-    ):
-        response += chunk
+    
+    try:
+        async for chunk in llm.generate_ollama_response(
+            client_id="system", user_input=prompt, model_name=model_name, system_prompt=None
+        ):
+            response += chunk
+    except Exception as e:
+        logger.error(f"Failed to check title generation via Ollama: {e}")
+        return False # Default to not generating title on error
+        
     return response.strip().lower().startswith('yes')
 
 # Helper: format display title by stripping special chars, preserving case, and truncating
