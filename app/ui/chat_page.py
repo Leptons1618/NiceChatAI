@@ -36,8 +36,8 @@ async def chat_page(client: Client):
 
         /* Chat scroll area styling - Adjust height calculation */
         #chat-scroll { 
-            /* Estimate header (~60px) + footer (~70px) + padding/margins (~10px) = ~140px */
-            height: calc(100vh - 140px) !important; 
+            /* Increase offset for better spacing: header (~60px) + footer (~80px) + padding/margins (~30px) = ~170px */
+            height: calc(100vh - 190px) !important; 
             overflow-y: auto !important; 
             scrollbar-width: none; /* Firefox */
             -ms-overflow-style: none; /* IE and Edge */
@@ -298,7 +298,8 @@ async def chat_page(client: Client):
                     # Fallback to full refresh if message component not found
                     chat_messages.refresh()
             # auto-save conversation after assistant response
-            await save_current_conversation()
+            # Pass open_drawer=False to prevent automatic drawer opening
+            await save_current_conversation(open_drawer=False)
         except Exception as e:
             logger.error(f"Error generating response from Ollama: {e}")
             chats[client_id][current_msg_idx] = (bot_name, "Error: Could not connect to Ollama service. Please ensure it's running.")
@@ -346,7 +347,7 @@ async def chat_page(client: Client):
             # Apply margin/padding to the container or items directly
             with ui.column().classes('w-full px-4'): # Add padding to the column
                 for key in sorted(saved_conversations.keys(), key=lambda t: t.split('_')[0], reverse=True):
-                    display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
+                    display_title = format_display_title(key, max_len=42)  # Shorter title for drawer items
                     # Card for item styling, ensure it doesn't cause overflow itself
                     with ui.card().classes('w-full mb-2 p-0 saved-chat-item bg-transparent border-0 shadow-none'):
                         with ui.row().classes('w-full justify-between items-center'):
@@ -368,7 +369,7 @@ async def chat_page(client: Client):
     # saved_list()  # REMOVED
 
     # Helper: save current conversation with summary (title is generated once)
-    async def save_current_conversation():
+    async def save_current_conversation(open_drawer=True):
         messages = chats[client_id]
         if not messages:
             ui.notify("No messages to save", color='warning', position='top')
@@ -391,9 +392,12 @@ async def chat_page(client: Client):
         # re-render saved list in drawer
         if drawer_saved_list:
             drawer_saved_list.refresh()
-        # open drawer automatically to show the new title
-        left_drawer.value = True
-        left_drawer.update()
+        
+        # Only open drawer if explicitly requested
+        if open_drawer:
+            left_drawer.value = True
+            left_drawer.update()
+            
         # update header title
         if title_label:
             display_title = format_display_title(title, max_len=100)  # Use longer title in header

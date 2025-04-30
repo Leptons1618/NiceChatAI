@@ -35,6 +35,9 @@ def preprocess_markdown(content: str) -> str:
     Returns:
         Enhanced markdown content
     """
+    # Fix starting lists that don't have proper newline before them
+    content = fix_list_beginnings(content)
+    
     # Fix numbered lists that don't have proper spacing
     content = fix_ordered_lists(content)
     
@@ -46,6 +49,30 @@ def preprocess_markdown(content: str) -> str:
     
     # Fix headings without proper spacing
     content = fix_headings(content)
+    
+    return content
+
+def fix_list_beginnings(content: str) -> str:
+    """
+    Specifically fix lists at the beginning of content or immediately after other elements.
+    This ensures the first list element is properly formatted.
+    """
+    # Ensure any content starting with a list has proper newlines
+    if re.match(r'^\s*(\d+\.\s|\*\s|\-\s|\+\s)', content):
+        content = '\n\n' + content
+    
+    # Find any list that starts immediately after text without newline
+    # Match pattern: text followed by newline, then immediately a list item without blank line
+    patterns = [
+        # For numbered lists (e.g., "Some text\n1. List item")
+        (r'([^\n])\n(\d+\.\s)', r'\1\n\n\2'),
+        
+        # For bullet lists with *, -, + (e.g., "Some text\n* List item")
+        (r'([^\n])\n([\*\-\+]\s)', r'\1\n\n\2')
+    ]
+    
+    for pattern, replacement in patterns:
+        content = re.sub(pattern, replacement, content)
     
     return content
 
@@ -64,6 +91,10 @@ def fix_ordered_lists(content: str) -> str:
     list_start_pattern = r'(\n[^\n]+\n)(\d+\.\s)'
     result = re.sub(list_start_pattern, r'\1\n\2', result)
     
+    # Fix continuations of numbered lists that might be broken
+    broken_list_pattern = r'(\d+\.\s.*\n)([^\s\n\d\*\-\+])'
+    result = re.sub(broken_list_pattern, r'\1\n\2', result)
+    
     return result
 
 def fix_unordered_lists(content: str) -> str:
@@ -80,6 +111,10 @@ def fix_unordered_lists(content: str) -> str:
     # Ensure blank line before list starts
     list_start_pattern = r'(\n[^\n]+\n)([\*\-\+]\s)'
     result = re.sub(list_start_pattern, r'\1\n\2', result)
+    
+    # Fix continuations of bullet lists that might be broken
+    broken_list_pattern = r'([\*\-\+]\s.*\n)([^\s\n\d\*\-\+])'
+    result = re.sub(broken_list_pattern, r'\1\n\2', result)
     
     return result
 
