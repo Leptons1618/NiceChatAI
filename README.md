@@ -47,10 +47,7 @@ A sleek, interactive chatbot built with Python and [NiceGUI](https://nicegui.io/
 
 Create a `.env` file based on the provided `.env.example`:
 
-```
-BOT_NAME=Assistant
-DEFAULT_MODEL=llama3
-OLLAMA_BASE_URL=http://localhost:11434
+```env
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB=nicechat
 ```
