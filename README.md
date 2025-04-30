@@ -4,10 +4,13 @@ A sleek, interactive chatbot built with Python and [NiceGUI](https://nicegui.io/
 
 ## Features
 
-- Modern web-based UI with NiceGUI
-- Configurable LLM backend (e.g., OpenAI, local models)
-- Persistent conversation history
-- Easy configuration via `config.json` and `app/config.py`
+- Modern, responsive UI with real-time streaming responses
+- Support for local LLMs through Ollama integration
+- Enhanced message rendering with proper formatting for lists, code blocks, and more
+- MongoDB-based conversation storage and retrieval
+- Conversation summaries and automatic title generation
+- User-friendly settings management
+- Easy configuration via web interface
 
 ## Installation
 
@@ -28,27 +31,71 @@ A sleek, interactive chatbot built with Python and [NiceGUI](https://nicegui.io/
    pip install -r requirements.txt
    ```
 
+4. Install MongoDB:
+   - [MongoDB Installation Guide](https://docs.mongodb.com/manual/installation/)
+   - Alternatively, use MongoDB Atlas cloud service
+
+5. Set up environment variables:
+   ```fish
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
 ## Configuration
 
-- **config.json**: General settings (e.g., API keys, model parameters).
-- **app/config.py**: Python-level defaults and overrides.
-- **ui/config_page.py**: UI for live configuration changes.
+### Environment Variables
+
+Create a `.env` file based on the provided `.env.example`:
+
+```
+BOT_NAME=Assistant
+DEFAULT_MODEL=llama3
+OLLAMA_BASE_URL=http://localhost:11434
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB=nicechat
+```
+
+### Configuration Files
+
+It'll automatically create a `config.json` file in the root directory. You can modify it to set your preferences.
+- **config.json**: General settings (e.g., model parameters, UI preferences)
+- **app/config.py**: Python-level defaults and overrides
+- **ui/config_page.py**: UI for live configuration changes
 
 Example `config.json`:
 ```json
 {
-  "OPENAI_API_KEY": "your_key_here",
-  "MODEL_NAME": "gpt-3.5-turbo",
-  "MAX_TOKENS": 1024
+    "ollama_base_url": "http://localhost:11434",
+    "ollama_timeout": 60,
+    "bot_name": "Assistant",
+    "default_model": "llama3.2:latest",
+    "source_urls": [],
+    "theme_dark_mode": true,
+    "available_models_cache": [
+        "llama3.2:latest"
+    ]
 }
 ```
 
 ## Usage
 
-Launch the app:
-```fish
-python main.py
-```
+1. Start your local Ollama instance:
+   ```fish
+   ollama serve
+   ```
+
+2. Ensure MongoDB service is running:
+   ```fish
+   # Linux/macOS
+   sudo systemctl start mongodb
+   # Windows
+   net start MongoDB
+   ```
+
+3. Launch the app:
+   ```fish
+   python main.py
+   ```
 
 By default, the web interface is available at `http://localhost:8080`.
 
@@ -57,14 +104,17 @@ By default, the web interface is available at `http://localhost:8080`.
 ```
 ├── main.py                # Entry point
 ├── requirements.txt       # Python dependencies
+├── .env.example           # Environment variables template
+├── .env                   # Your environment variables (git-ignored)
 ├── config.json            # User config
 ├── app/
-│   ├── llm.py             # LLM wrapper
+│   ├── llm.py             # LLM wrapper (Ollama integration)
 │   ├── config.py          # Python config
-│   └── saved_conversations.json
-└── ui/
-    ├── chat_page.py       # Chat UI
-    └── config_page.py     # Settings UI
+│   ├── db.py              # MongoDB operations
+│   └── ui/
+│       ├── chat_page.py   # Chat UI
+│       ├── config_page.py # Settings UI
+│       └── message_renderer.py # Enhanced message formatting
 ```
 
 ## Contributing
