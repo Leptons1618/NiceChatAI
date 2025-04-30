@@ -9,6 +9,7 @@ import re  # for cleaning titles
 # Use relative imports for modules within the app package
 from .. import config
 from .. import llm
+from .. import db  # Import the new db module
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,8 @@ chats: Dict[str, List[Tuple[str, str]]] = {}
 # Store selected model per client (client-specific selection)
 selected_models: Dict[str, str] = {}
 session_titles: Dict[str, str] = {}
+# Shared dictionary for saved conversations (now loaded from MongoDB)
+saved_conversations: Dict[str, Dict] = {}
 
 @ui.page('/')
 async def chat_page(client: Client):
@@ -253,53 +256,6 @@ async def chat_page(client: Client):
     # Placeholder for header title label
     title_label = None
 
-    # Helper: save current conversation with summary (title is generated once)
-    async def save_current_conversation():
-        messages = chats[client_id]
-        if not messages:
-            ui.notify("No messages to save", color='warning', position='top')
-            return
-        # generate title only once per session
-        if not session_titles[client_id]:
-            raw_title = await generate_conversation_title(messages)
-            # prefix with timestamp for uniqueness
-            prefix = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            title = f"{prefix}_{raw_title}"
-            session_titles[client_id] = title
-        else:
-            title = session_titles[client_id]
-        summary = await summarize_conversation(messages)
-        saved_conversations[title] = { 'messages': messages, 'summary': summary }
-        save_saved_conversations()
-        # re-render saved list in drawer
-        saved_list.refresh()
-        # open drawer automatically to show the new title
-        left_drawer.value = True
-        left_drawer.update()
-        # update header title
-        if title_label:
-            display_title = format_display_title(title, max_len=100)  # Use longer title in header
-            title_label.set_text(display_title)
-            title_label.update()
-
-    # Placeholder for dropdown to be referenced by fetch helper
-    model_selector = None
-
-    # Handler: fetch models and update the dropdown
-    async def fetch_models_and_update_ui():
-        try:
-            models = await llm.get_available_models()
-            config.set_available_models_cache(models)
-            if model_selector:
-                model_selector.options = models
-                if models and selected_models.get(client_id) not in models:
-                    selected_models[client_id] = models[0]
-                    model_selector.value = models[0]
-                model_selector.update()
-        except Exception as e:
-            logger.error(f"Failed to fetch models from Ollama: {e}")
-            ui.notify("Could not connect to Ollama service. Please ensure it's running.", color='negative', position='top')
-
     # Handler: send user message and stream assistant response
     async def send(e=None):
         user_text = text.value.strip()
@@ -335,10 +291,28 @@ async def chat_page(client: Client):
             chat_messages.refresh()
             ui.notify("Failed to get response from Ollama service.", color='negative', position='top')
 
+    # Define delete_conversation helper before drawer creation
+    def delete_conversation(title):
+        if title in saved_conversations:
+            db.delete_conversation(title)
+            del saved_conversations[title]
+            # Use drawer_saved_list instead of saved_list 
+            if drawer_saved_list:
+                drawer_saved_list.refresh()
+            ui.notify(f"Conversation deleted", color='info', position='top')
+            # Reset to new chat if the current one was deleted
+            if session_titles.get(client_id) == title:
+                new_chat()
+    
     # --- Navigation drawer with save/load conversations ---
     # Ensure the drawer itself handles scrolling, not necessarily the card inside
     left_drawer = ui.left_drawer(value=False).props("width=450").classes('chat-drawer')
+    
+    # Declare drawer_saved_list before using it
+    drawer_saved_list = None
+    
     with left_drawer:
+        # Use nonlocal inside functions, not at this level
         # Removed the wrapping ui.card here, apply styles directly or to drawer items
         ui.label(f'{cfg.get("bot_name", "ChatBot")}').classes('text-2xl font-bold text-center py-4 px-4')
         ui.separator().classes('mb-4 opacity-20 mx-4')
@@ -347,7 +321,7 @@ async def chat_page(client: Client):
         ui.button('New Chat', icon='add', on_click=new_chat) \
             .props('flat') \
             .classes('w-full text-left text-sm text-white hover:text-primary py-3 mb-3 chat-button mx-4')
-            
+        
         @ui.refreshable
         def render_saved_list():
             ui.label('Saved Chats').classes('text-xs text-center opacity-70 my-3 px-4')
@@ -358,21 +332,74 @@ async def chat_page(client: Client):
                     display_title = format_display_title(key, max_len=40)  # Shorter title for drawer items
                     # Card for item styling, ensure it doesn't cause overflow itself
                     with ui.card().classes('w-full mb-2 p-0 saved-chat-item bg-transparent border-0 shadow-none'):
-                        btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)) \
-                            .props('no-caps text-left align=left flat') \
-                            .classes('w-full text-left text-sm text-gray-200 hover:text-primary py-2')
-            
-        # keep a reference to the refreshable function
-        saved_list = render_saved_list
-        # initial render
-        saved_list()
+                        with ui.row().classes('w-full justify-between items-center'):
+                            btn = ui.button(display_title, on_click=lambda e, t=key: load_conversation(t)) \
+                                .props('no-caps text-left align=left flat') \
+                                .classes('flex-grow text-left text-sm text-gray-200 hover:text-primary py-2')
+                            # Add delete button
+                            ui.button(icon='delete', on_click=lambda e, t=key: delete_conversation(t)) \
+                                .props('flat round text-negative') \
+                                .classes('text-xs opacity-50 hover:opacity-100')
+        # Assign the drawer_saved_list reference inside the drawer
+        # drawer_saved_list = render_saved_list
+        drawer_saved_list = render_saved_list
+        # Initial render of saved list
+        drawer_saved_list()
 
-        ui.space()
-        with ui.row().classes('w-full justify-center items-center py-4'):
-            ui.label('Powered by').classes('text-xs opacity-70')
-            ui.image('https://nicegui.io/logo_square.png').classes('w-5 h-5 mx-1')
-            ui.label('&').classes('text-xs opacity-70 mx-1')
-            ui.image('https://ollama.com/public/ollama.png').classes('w-5 h-5 mx-1')
+    # Remove the old references to saved_list that were outside the drawer
+    # saved_list = render_saved_list  # REMOVED
+    # saved_list()  # REMOVED
+
+    # Helper: save current conversation with summary (title is generated once)
+    async def save_current_conversation():
+        messages = chats[client_id]
+        if not messages:
+            ui.notify("No messages to save", color='warning', position='top')
+            return
+        # generate title only once per session
+        if not session_titles[client_id]:
+            raw_title = await generate_conversation_title(messages)
+            # prefix with timestamp for uniqueness
+            prefix = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            title = f"{prefix}_{raw_title}"
+            session_titles[client_id] = title
+        else:
+            title = session_titles[client_id]
+        summary = await summarize_conversation(messages)
+        saved_conversations[title] = {'messages': messages, 'summary': summary}
+        
+        # Save to MongoDB instead of JSON file
+        db.save_conversation(title, saved_conversations[title])
+        
+        # re-render saved list in drawer
+        if drawer_saved_list:
+            drawer_saved_list.refresh()
+        # open drawer automatically to show the new title
+        left_drawer.value = True
+        left_drawer.update()
+        # update header title
+        if title_label:
+            display_title = format_display_title(title, max_len=100)  # Use longer title in header
+            title_label.set_text(display_title)
+            title_label.update()
+
+    # Placeholder for dropdown to be referenced by fetch helper
+    model_selector = None
+
+    # Handler: fetch models and update the dropdown
+    async def fetch_models_and_update_ui():
+        try:
+            models = await llm.get_available_models()
+            config.set_available_models_cache(models)
+            if model_selector:
+                model_selector.options = models
+                if models and selected_models.get(client_id) not in models:
+                    selected_models[client_id] = models[0]
+                    model_selector.value = models[0]
+                model_selector.update()
+        except Exception as e:
+            logger.error(f"Failed to fetch models from Ollama: {e}")
+            ui.notify("Could not connect to Ollama service. Please ensure it's running.", color='negative', position='top')
 
     # --- Header ---
     # Note: The actual rendered height of header/footer might vary. 
@@ -468,28 +495,16 @@ async def chat_page(client: Client):
     # fetch model list and populate dropdown on connect
     await fetch_models_and_update_ui()
 
-# Utilities for saving/loading conversations
-SAVED_CONV_FILE = os.path.join(os.path.dirname(__file__), '..', 'saved_conversations.json')
-saved_conversations = {}
-
+# Utilities for loading/saving conversations from MongoDB
 def load_saved_conversations():
     global saved_conversations
     try:
-        with open(SAVED_CONV_FILE) as f:
-            saved_conversations = json.load(f)
-    except FileNotFoundError:
-        saved_conversations = {}
+        saved_conversations = db.get_all_conversations()
     except Exception as e:
-        logger.error(f"Failed to load saved conversations: {e}")
+        logger.error(f"Failed to load saved conversations from MongoDB: {e}")
         saved_conversations = {}
 
-def save_saved_conversations():
-    try:
-        with open(SAVED_CONV_FILE, 'w') as f:
-            json.dump(saved_conversations, f)
-    except Exception as e:
-        logger.error(f"Failed to save conversations: {e}")
-
+# The following helpers remain the same as they don't interact with storage directly
 async def generate_conversation_title(messages: List[Tuple[str, str]]) -> str:
     """Generate a short descriptive title for the conversation using the LLM."""
     # Take last up to 10 messages for context

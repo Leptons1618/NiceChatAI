@@ -45,3 +45,6 @@ Thumbs.db
 
 # Ignore pywebview or other generated assets
 webview/dist/
+
+# Ignore environment variables
+.env
