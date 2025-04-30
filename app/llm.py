@@ -72,8 +72,11 @@ async def generate_ollama_response(
     # Define a default system prompt if none is provided
     if system_prompt is None:
         system_prompt = (
-            "You are a helpful assistant. Please provide structured responses using Markdown. "
-            "For code blocks, use triple backticks and specify the language, e.g., ```python\nprint('Hello')\n```."
+            "You are a helpful, knowledgeable assistant. Respond with well-structured, clear answers using Markdown formatting. "
+            "For code examples, always use triple backticks with the language specified (e.g., ```python, ```javascript). "
+            "When appropriate, include explanations with your code. Format lists, tables, and headings properly with Markdown. "
+            "If you're unsure about something, acknowledge the uncertainty rather than providing incorrect information. "
+            "Keep responses concise but thorough, focusing on accuracy and clarity."
         )
 
     if not model_name:

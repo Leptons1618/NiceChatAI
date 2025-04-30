@@ -10,6 +10,7 @@ import re  # for cleaning titles
 from .. import config
 from .. import llm
 from .. import db  # Import the new db module
+from . import message_renderer  # Import the new message renderer
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +56,19 @@ async def chat_page(client: Client):
         #chat-scroll:hover { scrollbar-width: thin; scrollbar-color: rgba(98, 114, 164, 0.5) transparent; } 
         */
 
-        /* Chat bubble markdown styling */
+        /* Chat bubble markdown styling - Enhanced for lists */
         .chat-bubble h1 { font-size:1em; margin:0.4em 0; }
         .chat-bubble h2 { font-size:0.95em; margin:0.35em 0; }
         .chat-bubble h3 { font-size:0.9em; margin:0.3em 0; }
         .chat-bubble p, .chat-bubble li { font-size:0.9em; line-height:1.4; }
         .chat-bubble p { margin:0.2em 0 !important; }
         .chat-bubble ul, .chat-bubble ol { margin-left:1em; margin-bottom:0.5em; }
+        /* Enhanced list styling for better spacing and clarity */
+        .chat-bubble ol { padding-left:1.5em !important; margin-top:0.5em !important; }
+        .chat-bubble ul { padding-left:1.5em !important; margin-top:0.5em !important; }
+        .chat-bubble li { margin-bottom:0.25em !important; }
+        .chat-bubble ol > li { padding-left:0.3em !important; }
+        .chat-bubble ul > li { padding-left:0.2em !important; }
         .chat-bubble code { background:#334155; color:#f8fafc; padding:2px 4px; border-radius:4px; font-family:'Fira Code', monospace; font-size:0.85em; user-select:text; }
         .chat-bubble pre { background:#334155; padding:12px; padding-top:30px; border-radius:12px; overflow-x:auto; font-family:'Fira Code', monospace; font-size:0.85em; margin:0.5em 0; position:relative; user-select:text; }
         .chat-bubble pre code { background:none; }
@@ -271,6 +278,8 @@ async def chat_page(client: Client):
         
         bot_name = cfg.get('bot_name', 'Bot')
         chats[client_id].append((bot_name, ''))
+        # Get the current message index for selective update
+        current_msg_idx = len(chats[client_id]) - 1
         chat_messages.refresh()
         
         try:
@@ -280,15 +289,23 @@ async def chat_page(client: Client):
                 selected_models.get(client_id) or '',
                 system_prompt,
             ):
-                name, prev = chats[client_id][-1]
-                chats[client_id][-1] = (name, prev + chunk)
-                chat_messages.refresh()
+                name, prev = chats[client_id][current_msg_idx]
+                chats[client_id][current_msg_idx] = (name, prev + chunk)
+                # Only refresh the specific message component being updated
+                if current_msg_idx in message_components:
+                    message_components[current_msg_idx].refresh()
+                else:
+                    # Fallback to full refresh if message component not found
+                    chat_messages.refresh()
             # auto-save conversation after assistant response
             await save_current_conversation()
         except Exception as e:
             logger.error(f"Error generating response from Ollama: {e}")
-            chats[client_id][-1] = (bot_name, "Error: Could not connect to Ollama service. Please ensure it's running.")
-            chat_messages.refresh()
+            chats[client_id][current_msg_idx] = (bot_name, "Error: Could not connect to Ollama service. Please ensure it's running.")
+            if current_msg_idx in message_components:
+                message_components[current_msg_idx].refresh()
+            else:
+                chat_messages.refresh()
             ui.notify("Failed to get response from Ollama service.", color='negative', position='top')
 
     # Define delete_conversation helper before drawer creation
@@ -447,12 +464,29 @@ async def chat_page(client: Client):
         scroll_container = ui.scroll_area().props('id=chat-scroll').classes('w-full shadow-lg')
         # Use the scroll_container
         with scroll_container:
+             # Dictionary to store message components for selective refreshing
+             message_components = {}
+             
+             # Create a refreshable component for a single message
+             def create_message_component(msg_idx):
+                 @ui.refreshable
+                 def message_content(idx=msg_idx):
+                     if idx >= len(chats.get(client_id, [])):
+                         return
+                     name, message = chats.get(client_id, [])[idx]
+                     with ui.card().classes(f'chat-bubble p-3 mb-2 shadow-md {"user-message" if name == "You" else "bot-message"} rounded-2xl max-w-[80%]'):
+                         # Use the enhanced message renderer instead of direct ui.markdown
+                         message_renderer.render_message(message)
+                     # Run JavaScript to add copy buttons after content is updated
+                     ui.run_javascript("addCopyButtons()")
+                 return message_content
+             
              @ui.refreshable
              def chat_messages() -> None:
                  bot_name = config.get_config().get("bot_name", "Bot")
                  with ui.column().classes('w-full p-4 space-y-4'):
                      # Render messages with custom bubbles and avatars
-                     for name, message in chats.get(client_id, []):
+                     for idx, (name, message) in enumerate(chats.get(client_id, [])):
                          is_user = (name == 'You')
                          # Use different RoboHash sets for user and bot
                          avatar_id = 'User' if is_user else bot_name
@@ -463,15 +497,20 @@ async def chat_page(client: Client):
                              # Bot avatar on left
                              if not is_user:
                                  ui.image(avatar_url).classes('w-10 h-10 rounded-full mr-3 avatar-img bot-avatar') # Larger avatar
-                             # Message bubble
-                             with ui.card().classes(f'chat-bubble p-3 mb-2 shadow-md {"user-message" if is_user else "bot-message"} rounded-2xl max-w-[80%]'):
-                                 ui.markdown(message)
+                             
+                             # Create a refreshable component for this message if it doesn't exist
+                             if idx not in message_components:
+                                 message_components[idx] = create_message_component(idx)
+                             # Render the message content
+                             message_components[idx]()
+                             
                              # User avatar on right
                              if is_user:
                                  ui.image(avatar_url).classes('w-10 h-10 rounded-full ml-3 avatar-img user-avatar') # Larger avatar
+                 
                  # Auto-scroll to bottom of scroll area after UI update
                  ui.timer(0.1, lambda: scroll_container.scroll_to(percent=1.0), once=True)
-                 ui.run_javascript("addCopyButtons()")
+             
              # Initial rendering of chat messages
              chat_messages()
              ui.run_javascript("addCopyButtons()")
